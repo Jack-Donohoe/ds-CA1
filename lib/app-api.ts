@@ -74,13 +74,13 @@ export class AppApi extends Construct {
       }
     );
 
-    const getReviewByIdNameFn = new lambdanode.NodejsFunction(
+    const getReviewByDetailsFn = new lambdanode.NodejsFunction(
       this,
-      "GetReviewByIdNameFn",
+      "GetReviewByDetailsFn",
       {
         architecture: lambda.Architecture.ARM_64,
         runtime: lambda.Runtime.NODEJS_16_X,
-        entry: `${__dirname}/../lambda/crud/getReviewsById&ReviewerName.ts`,
+        entry: `${__dirname}/../lambda/crud/getReviewsByDetails.ts`,
         timeout: cdk.Duration.seconds(10),
         memorySize: 128,
         environment: {
@@ -106,6 +106,18 @@ export class AppApi extends Construct {
       }
     );
 
+    const newReviewFn = new lambdanode.NodejsFunction(this, "AddReviewFn", {
+      architecture: lambda.Architecture.ARM_64,
+      runtime: lambda.Runtime.NODEJS_16_X,
+      entry: `${__dirname}/../lambda/crud/addReview.ts`,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 128,
+      environment: {
+        TABLE_NAME: reviewsTable.tableName,
+        REGION: "eu-west-1",
+      },
+    });
+
     new custom.AwsCustomResource(this, "reviewsddbInitData", {
       onCreate: {
         service: "DynamoDB",
@@ -126,7 +138,8 @@ export class AppApi extends Construct {
     reviewsTable.grantReadData(getAllReviewsFn)
     reviewsTable.grantReadData(getReviewByIdFn)
     reviewsTable.grantReadData(getReviewByNameFn)
-    reviewsTable.grantReadData(getReviewByIdNameFn)
+    reviewsTable.grantReadData(getReviewByDetailsFn)
+    reviewsTable.grantReadWriteData(newReviewFn)
 
     // REST API 
     const api = new apig.RestApi(this, "RestAPI", {
@@ -181,6 +194,11 @@ export class AppApi extends Construct {
       new apig.LambdaIntegration(getAllReviewsFn, { proxy: true })
     )
 
+    allReviewsEndpoint.addMethod(
+      "POST",
+      new apig.LambdaIntegration(newReviewFn, { proxy: true })
+    );
+
     allReviewsNameEndpoint.addMethod(
       "GET",
       new apig.LambdaIntegration(getReviewByNameFn, { proxy: true })
@@ -193,7 +211,7 @@ export class AppApi extends Construct {
 
     reviewerNameEndpoint.addMethod(
       "GET",
-      new apig.LambdaIntegration(getReviewByIdNameFn, { proxy: true })
+      new apig.LambdaIntegration(getReviewByDetailsFn, { proxy: true })
     )
   }
 }
