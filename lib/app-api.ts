@@ -4,6 +4,11 @@ import { Construct } from "constructs";
 import * as apig from "aws-cdk-lib/aws-apigateway";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as node from "aws-cdk-lib/aws-lambda-nodejs";
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import { reviews } from "../seed/reviews";
+import * as lambdanode from "aws-cdk-lib/aws-lambda-nodejs";
+import * as custom from "aws-cdk-lib/custom-resources";
+import { generateBatch } from "../shared/utils";
 
 type AppApiProps = {
   userPoolId: string;
@@ -13,14 +18,6 @@ type AppApiProps = {
 export class AppApi extends Construct {
   constructor(scope: Construct, id: string, props: AppApiProps) {
     super(scope, id);
-
-    const appApi = new apig.RestApi(this, "AppApi", {
-      description: "App RestApi",
-      endpointTypes: [apig.EndpointType.REGIONAL],
-      defaultCorsPreflightOptions: {
-        allowOrigins: apig.Cors.ALL_ORIGINS,
-      },
-    });
 
     const appCommonFnProps = {
       architecture: lambda.Architecture.ARM_64,
@@ -35,40 +32,118 @@ export class AppApi extends Construct {
       },
     };
 
-    const protectedRes = appApi.root.addResource("protected");
+    // Tables
+    const reviewsTable = new dynamodb.Table(this, "ReviewsTable", {
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      partitionKey: { name: "movieId", type: dynamodb.AttributeType.NUMBER },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      tableName: "Reviews",
+    })
 
-    const publicRes = appApi.root.addResource("public");
-
-    const protectedFn = new node.NodejsFunction(this, "ProtectedFn", {
-      ...appCommonFnProps,
-      entry: "./lambda/protected.ts",
-    });
-
-    const publicFn = new node.NodejsFunction(this, "PublicFn", {
-      ...appCommonFnProps,
-      entry: "./lambda/public.ts",
-    });
-
-    const authorizerFn = new node.NodejsFunction(this, "AuthorizerFn", {
-      ...appCommonFnProps,
-      entry: "./lambda/auth/authorizer.ts",
-    });
-
-    const requestAuthorizer = new apig.RequestAuthorizer(
+    // Functions
+    const getReviewByIdFn = new lambdanode.NodejsFunction(
       this,
-      "RequestAuthorizer",
+      "GetReviewByIdFn",
       {
-        identitySources: [apig.IdentitySource.header("cookie")],
-        handler: authorizerFn,
-        resultsCacheTtl: cdk.Duration.minutes(0),
+        architecture: lambda.Architecture.ARM_64,
+        runtime: lambda.Runtime.NODEJS_16_X,
+        entry: `${__dirname}/../lambda/crud/getReviewById.ts`,
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 128,
+        environment: {
+          TABLE_NAME: reviewsTable.tableName,
+          REGION: 'eu-west-1',
+        },
       }
     );
 
-    protectedRes.addMethod("GET", new apig.LambdaIntegration(protectedFn), {
-      authorizer: requestAuthorizer,
-      authorizationType: apig.AuthorizationType.CUSTOM,
+    const getAllReviewsFn = new lambdanode.NodejsFunction(
+      this,
+      "GetAllReviews",
+      {
+        architecture: lambda.Architecture.ARM_64,
+        runtime: lambda.Runtime.NODEJS_16_X,
+        entry: `${__dirname}/../lambda/crud/getAllReviews.ts`,
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 128,
+        environment: {
+          TABLE_NAME: reviewsTable.tableName,
+          REGION: 'eu-west-1',
+        },
+      }
+    );
+
+    new custom.AwsCustomResource(this, "reviewsddbInitData", {
+      onCreate: {
+        service: "DynamoDB",
+        action: "batchWriteItem",
+        parameters: {
+          RequestItems: {
+            [reviewsTable.tableName]: generateBatch(reviews)
+          },
+        },
+        physicalResourceId: custom.PhysicalResourceId.of("reviewsddbInitData"), //.of(Date.now().toString()),
+      },
+      policy: custom.AwsCustomResourcePolicy.fromSdkCalls({
+        resources: [reviewsTable.tableArn],
+      }),
     });
 
-    publicRes.addMethod("GET", new apig.LambdaIntegration(publicFn));
+    // Permissions
+    reviewsTable.grantReadData(getAllReviewsFn)
+    reviewsTable.grantReadData(getReviewByIdFn)
+
+    // REST API 
+    const api = new apig.RestApi(this, "RestAPI", {
+      description: "assignment api",
+      deployOptions: {
+        stageName: "dev",
+      },
+      // 👇 enable CORS
+      defaultCorsPreflightOptions: {
+        allowHeaders: ["Content-Type", "X-Amz-Date"],
+        allowMethods: ["OPTIONS", "GET", "POST", "PUT", "PATCH", "DELETE"],
+        allowCredentials: true,
+        allowOrigins: ["*"],
+      },
+    });
+
+    // const authorizerFn = new node.NodejsFunction(this, "AuthorizerFn", {
+    //   ...appCommonFnProps,
+    //   entry: "./lambda/auth/authorizer.ts",
+    // });
+
+    // const requestAuthorizer = new apig.RequestAuthorizer(
+    //   this,
+    //   "RequestAuthorizer",
+    //   {
+    //     identitySources: [apig.IdentitySource.header("cookie")],
+    //     handler: authorizerFn,
+    //     resultsCacheTtl: cdk.Duration.minutes(0),
+    //   }
+    // );
+
+    // Endpoint: GET movies
+    const moviesEndpoint = api.root.addResource("movies")
+
+    // Endpoint: GET movies/reviews - returns all reviews in the app
+    const allReviewsEndpoint = moviesEndpoint.addResource("reviews")
+
+    // Endpoint: GET movies/{movieId} - returns a specific movie
+    const movieEndpoint = moviesEndpoint.addResource("{movieId}")
+
+    // Endpoint: GET movies/{movieId}/reviews - returns all reviews on a specific movie
+    const reviewsEndpoint = movieEndpoint.addResource("reviews")
+
+    
+    allReviewsEndpoint.addMethod(
+      "GET",
+      new apig.LambdaIntegration(getAllReviewsFn, { proxy: true })
+    )
+    
+    reviewsEndpoint.addMethod(
+      "GET",
+      new apig.LambdaIntegration(getReviewByIdFn, { proxy: true })
+    )
   }
 }

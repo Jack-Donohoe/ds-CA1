@@ -6,10 +6,13 @@ import {
   } from "aws-lambda";
   
   import axios from "axios"
-  // const jwkToPem = require("jwk-to-pem");
-  // const jwt = require("jsonwebtoken");
-  import jwt from 'jsonwebtoken'
-  import jwkToPem from "jwk-to-pem";
+  const jwkToPem = require("jwk-to-pem");
+  const jwt = require("jsonwebtoken");
+  // import jwt from 'jsonwebtoken'
+  // import jwkToPem from "jwk-to-pem";
+
+  import { marshall } from "@aws-sdk/util-dynamodb";
+  import { MovieReview } from "./types";
   
   export type CookieMap = { [key: string]: string } | undefined;
   export type JwtToken = { sub: string; email: string } | null;
@@ -75,4 +78,19 @@ import {
         },
       ],
     };
+  };
+
+  type Entity = MovieReview;  // NEW
+  export const generateItem = (entity: Entity) => {
+    return {
+      PutRequest: {
+        Item: marshall(entity),
+      },
+    };
+  };
+
+  export const generateBatch = (data: Entity[]) => {
+    return data.map((e) => {
+      return generateItem(e);
+    });
   };
