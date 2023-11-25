@@ -1,41 +1,56 @@
 import { APIGatewayProxyHandlerV2 } from "aws-lambda";
 
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, ScanCommand, ScanCommandInput } from "@aws-sdk/lib-dynamodb";
 
+const ddbDocClient = createDDbDocClient();
 
-const ddbClient = new DynamoDBClient({ region: process.env.REGION });
-
-export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {
+export const handler: APIGatewayProxyHandlerV2 = async (event, context) => { // Note change
   try {
-    // Print Event
     console.log("Event: ", event);
+    const parameters = event?.pathParameters;
+    const reviewerName = parameters?.reviewerName;
+    
+    if (!reviewerName) {
+        return {
+          statusCode: 404,
+          headers: {
+              "content-type": "application/json",
+          },
+          body: JSON.stringify({ Message: "Missing reviewer name" }),
+        };
+      }
 
-    const commandOutput = await ddbClient.send(
-      new ScanCommand({
-        TableName: process.env.TABLE_NAME,
-      })
-    );
+    const commandInput: ScanCommandInput = {
+      TableName: process.env.TABLE_NAME,
+      FilterExpression: "reviewerName = :r",
+      ExpressionAttributeValues: {
+          ":r": reviewerName,
+      }
+  };
+
+  const commandOutput = await ddbDocClient.send(new ScanCommand(commandInput));
+
+    console.log("ScanCommand response: ", commandOutput);
     if (!commandOutput.Items) {
       return {
         statusCode: 404,
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ Message: "Invalid reviews database" }),
+        body: JSON.stringify({ Message: "Invalid movie Id" }),
       };
     }
-    const body = {
+    let body = {
       data: commandOutput.Items,
     };
 
-    // Return Response
     return {
       statusCode: 200,
       headers: {
         "content-type": "application/json",
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ body }),
     };
   } catch (error: any) {
     console.log(JSON.stringify(error));

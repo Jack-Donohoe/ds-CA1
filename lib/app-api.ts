@@ -36,6 +36,7 @@ export class AppApi extends Construct {
     const reviewsTable = new dynamodb.Table(this, "ReviewsTable", {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       partitionKey: { name: "movieId", type: dynamodb.AttributeType.NUMBER },
+      sortKey: { name: "reviewDate", type: dynamodb.AttributeType.STRING },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       tableName: "Reviews",
     })
@@ -47,7 +48,39 @@ export class AppApi extends Construct {
       {
         architecture: lambda.Architecture.ARM_64,
         runtime: lambda.Runtime.NODEJS_16_X,
-        entry: `${__dirname}/../lambda/crud/getReviewById.ts`,
+        entry: `${__dirname}/../lambda/crud/getReviewsById.ts`,
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 128,
+        environment: {
+          TABLE_NAME: reviewsTable.tableName,
+          REGION: 'eu-west-1',
+        },
+      }
+    );
+
+    const getReviewByNameFn = new lambdanode.NodejsFunction(
+      this,
+      "GetReviewByNameFn",
+      {
+        architecture: lambda.Architecture.ARM_64,
+        runtime: lambda.Runtime.NODEJS_16_X,
+        entry: `${__dirname}/../lambda/crud/getReviewsByReviewerName.ts`,
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 128,
+        environment: {
+          TABLE_NAME: reviewsTable.tableName,
+          REGION: 'eu-west-1',
+        },
+      }
+    );
+
+    const getReviewByIdNameFn = new lambdanode.NodejsFunction(
+      this,
+      "GetReviewByIdNameFn",
+      {
+        architecture: lambda.Architecture.ARM_64,
+        runtime: lambda.Runtime.NODEJS_16_X,
+        entry: `${__dirname}/../lambda/crud/getReviewsById&ReviewerName.ts`,
         timeout: cdk.Duration.seconds(10),
         memorySize: 128,
         environment: {
@@ -92,6 +125,8 @@ export class AppApi extends Construct {
     // Permissions
     reviewsTable.grantReadData(getAllReviewsFn)
     reviewsTable.grantReadData(getReviewByIdFn)
+    reviewsTable.grantReadData(getReviewByNameFn)
+    reviewsTable.grantReadData(getReviewByIdNameFn)
 
     // REST API 
     const api = new apig.RestApi(this, "RestAPI", {
@@ -129,21 +164,36 @@ export class AppApi extends Construct {
     // Endpoint: GET movies/reviews - returns all reviews in the app
     const allReviewsEndpoint = moviesEndpoint.addResource("reviews")
 
-    // Endpoint: GET movies/{movieId} - returns a specific movie
+    // Endpoint: GET movies/revies/{reviewerName} - returns all reviews in app with given reviewer name
+    const allReviewsNameEndpoint = allReviewsEndpoint.addResource("{reviewerName}")
+
+    // Endpoint: GET movies/{movieId}
     const movieEndpoint = moviesEndpoint.addResource("{movieId}")
 
     // Endpoint: GET movies/{movieId}/reviews - returns all reviews on a specific movie
     const reviewsEndpoint = movieEndpoint.addResource("reviews")
 
+    // Endpoint: Get movies/{movieId}/reviews/{reviewerName} - returns all reviews on a specific movie with given reviewer name
+    const reviewerNameEndpoint = reviewsEndpoint.addResource("{reviewerName}")
     
     allReviewsEndpoint.addMethod(
       "GET",
       new apig.LambdaIntegration(getAllReviewsFn, { proxy: true })
     )
+
+    allReviewsNameEndpoint.addMethod(
+      "GET",
+      new apig.LambdaIntegration(getReviewByNameFn, { proxy: true })
+    )
     
     reviewsEndpoint.addMethod(
       "GET",
       new apig.LambdaIntegration(getReviewByIdFn, { proxy: true })
+    )
+
+    reviewerNameEndpoint.addMethod(
+      "GET",
+      new apig.LambdaIntegration(getReviewByIdNameFn, { proxy: true })
     )
   }
 }
