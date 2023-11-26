@@ -45,7 +45,8 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => { // 
     if (regex.test(details)){
       commandInput = {
         ...commandInput,
-        KeyConditionExpression: "movieId = :m and begins_with(reviewDate, :y)",
+        KeyConditionExpression: "movieId = :m",
+        FilterExpression: "begins_with(reviewDate, :y)",
         ExpressionAttributeValues: {
             ":m": movieId,
             ":y": details,
