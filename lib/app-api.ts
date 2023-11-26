@@ -36,7 +36,7 @@ export class AppApi extends Construct {
     const reviewsTable = new dynamodb.Table(this, "ReviewsTable", {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       partitionKey: { name: "movieId", type: dynamodb.AttributeType.NUMBER },
-      sortKey: { name: "reviewDate", type: dynamodb.AttributeType.STRING },
+      sortKey: { name: "reviewerName", type: dynamodb.AttributeType.STRING },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       tableName: "Reviews",
     })
@@ -118,6 +118,18 @@ export class AppApi extends Construct {
       },
     });
 
+    const updateReviewFn = new lambdanode.NodejsFunction(this, "UpdateReviewFn", {
+      architecture: lambda.Architecture.ARM_64,
+      runtime: lambda.Runtime.NODEJS_16_X,
+      entry: `${__dirname}/../lambda/crud/updateReviews.ts`,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 128,
+      environment: {
+        TABLE_NAME: reviewsTable.tableName,
+        REGION: "eu-west-1",
+      },
+    });
+
     new custom.AwsCustomResource(this, "reviewsddbInitData", {
       onCreate: {
         service: "DynamoDB",
@@ -140,6 +152,7 @@ export class AppApi extends Construct {
     reviewsTable.grantReadData(getReviewByNameFn)
     reviewsTable.grantReadData(getReviewByDetailsFn)
     reviewsTable.grantReadWriteData(newReviewFn)
+    reviewsTable.grantReadWriteData(updateReviewFn)
 
     // REST API 
     const api = new apig.RestApi(this, "RestAPI", {
@@ -177,7 +190,7 @@ export class AppApi extends Construct {
     // Endpoint: GET movies/reviews - returns all reviews in the app
     const allReviewsEndpoint = moviesEndpoint.addResource("reviews")
 
-    // Endpoint: GET movies/revies/{reviewerName} - returns all reviews in app with given reviewer name
+    // Endpoint: GET movies/reviews/{reviewerName} - returns all reviews in app with given reviewer name
     const allReviewsNameEndpoint = allReviewsEndpoint.addResource("{reviewerName}")
 
     // Endpoint: GET movies/{movieId}
@@ -186,8 +199,8 @@ export class AppApi extends Construct {
     // Endpoint: GET movies/{movieId}/reviews - returns all reviews on a specific movie
     const reviewsEndpoint = movieEndpoint.addResource("reviews")
 
-    // Endpoint: Get movies/{movieId}/reviews/{reviewerName} - returns all reviews on a specific movie with given reviewer name
-    const reviewerNameEndpoint = reviewsEndpoint.addResource("{reviewerName}")
+    // Endpoint: GET movies/{movieId}/reviews/{details} - returns all reviews on a specific movie with given reviewer name or year
+    const reviewDetailsEndpoint = reviewsEndpoint.addResource("{details}")
     
     allReviewsEndpoint.addMethod(
       "GET",
@@ -209,9 +222,14 @@ export class AppApi extends Construct {
       new apig.LambdaIntegration(getReviewByIdFn, { proxy: true })
     )
 
-    reviewerNameEndpoint.addMethod(
+    reviewDetailsEndpoint.addMethod(
       "GET",
       new apig.LambdaIntegration(getReviewByDetailsFn, { proxy: true })
+    )
+
+    reviewDetailsEndpoint.addMethod(
+      "PUT",
+      new apig.LambdaIntegration(updateReviewFn, { proxy: true })
     )
   }
 }

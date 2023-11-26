@@ -1,17 +1,15 @@
 import { APIGatewayProxyHandlerV2 } from "aws-lambda";
 
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, ScanCommand, ScanCommandInput } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, QueryCommand, QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 const ddbDocClient = createDDbDocClient();
 
 export const handler: APIGatewayProxyHandlerV2 = async (event, context) => { // Note change
   try {
     console.log("Event: ", event);
-    // const parameters = event?.queryStringParameters;
-    // const movieId = parameters ? parseInt(parameters.movieId) : undefined;
     const parameters = event?.pathParameters;
     const movieId = parameters?.movieId ? parseInt(parameters.movieId) : undefined;
-    const reviewerName = parameters?.reviewerName;
+    const details = parameters?.details;
 
     if (!movieId) {
       return {
@@ -23,26 +21,39 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => { // 
       };
     }
 
-    if (!reviewerName) {
+    if (!details) {
       return {
         statusCode: 404,
         headers: {
-            "content-type": "application/json",
+          "content-type": "application/json",
         },
-        body: JSON.stringify({ Message: "Missing reviewer name" }),
+        body: JSON.stringify({ Message: "Missing details" }),
       };
     }
 
-    const commandInput: ScanCommandInput = {
+    const regex = new RegExp("20[0-9][0-9]")
+
+    let commandInput: QueryCommandInput = {
         TableName: process.env.TABLE_NAME,
-        FilterExpression: "movieId = :m and reviewerName = :r",
+        KeyConditionExpression: "movieId = :m and reviewerName = :r",
         ExpressionAttributeValues: {
             ":m": movieId,
-            ":r": reviewerName,
+            ":r": details,
         }
     };
 
-    const commandOutput = await ddbDocClient.send(new ScanCommand(commandInput));
+    if (regex.test(details)){
+      commandInput = {
+        ...commandInput,
+        KeyConditionExpression: "movieId = :m and begins_with(reviewDate, :y)",
+        ExpressionAttributeValues: {
+            ":m": movieId,
+            ":y": details,
+        }
+      }
+    }
+
+    const commandOutput = await ddbDocClient.send(new QueryCommand(commandInput));
     
     console.log("GetCommand response: ", commandOutput);
     if (!commandOutput.Items) {
