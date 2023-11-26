@@ -40,7 +40,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {
         const commandOutput = await ddbDocClient.send(
             new PutCommand({
                 TableName: process.env.TABLE_NAME,
-                Item: body as Record<string, any>
+                Item: body
             })
         );
         return {
@@ -57,7 +57,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {
             headers: {
                 "content-type": "application/json",
             },
-            body: JSON.stringify({ error }),
+            body: JSON.stringify({ message: error.message }),
         };
     }
 };
