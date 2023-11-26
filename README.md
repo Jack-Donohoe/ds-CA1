@@ -32,10 +32,12 @@ This repository contains the implementation of a serverless REST API for the AWS
 + __POST /auth/signin__ - Sign in a user.
 + __GET /auth/signout__ - Sign out a user.
 
+### API Gateways
+
 ![](./images/API_Resources_1.png)
 
 ![](./images/API_Resources_2.png)
 
-### Authentication..
+### Authentication
 
 ![](./images/Authentication.png)
