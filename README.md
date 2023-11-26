@@ -41,3 +41,6 @@ This repository contains the implementation of a serverless REST API for the AWS
 ### Authentication
 
 ![](./images/Authentication.png)
+
+### Video
+[Link to demo](https://youtu.be/USGedFoZWZc)
