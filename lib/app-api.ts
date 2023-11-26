@@ -9,6 +9,7 @@ import { reviews } from "../seed/reviews";
 import * as lambdanode from "aws-cdk-lib/aws-lambda-nodejs";
 import * as custom from "aws-cdk-lib/custom-resources";
 import { generateBatch } from "../shared/utils";
+import { PolicyStatement } from "aws-cdk-lib/aws-iam";
 
 type AppApiProps = {
   userPoolId: string;
@@ -130,6 +131,18 @@ export class AppApi extends Construct {
       },
     });
 
+    const translateReviewFn = new lambdanode.NodejsFunction(this, "TranslateReviewFn", {
+      architecture: lambda.Architecture.ARM_64,
+      runtime: lambda.Runtime.NODEJS_16_X,
+      entry: `${__dirname}/../lambda/crud/translateReviews.ts`,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 128,
+      environment: {
+        TABLE_NAME: reviewsTable.tableName,
+        REGION: "eu-west-1",
+      },
+    });
+
     new custom.AwsCustomResource(this, "reviewsddbInitData", {
       onCreate: {
         service: "DynamoDB",
@@ -153,6 +166,13 @@ export class AppApi extends Construct {
     reviewsTable.grantReadData(getReviewByDetailsFn)
     reviewsTable.grantReadWriteData(newReviewFn)
     reviewsTable.grantReadWriteData(updateReviewFn)
+    reviewsTable.grantReadData(translateReviewFn)
+
+    // Add permission to translateReviewFn to use AWS translate features
+    translateReviewFn.addToRolePolicy(new PolicyStatement({
+      actions: ['translate:TranslateText'],
+      resources: ["*"],
+    }))
 
     // REST API 
     const api = new apig.RestApi(this, "RestAPI", {
@@ -201,6 +221,9 @@ export class AppApi extends Construct {
 
     // Endpoint: GET movies/{movieId}/reviews/{details} - returns all reviews on a specific movie with given reviewer name or year
     const reviewDetailsEndpoint = reviewsEndpoint.addResource("{details}")
+
+    // Endpoint: GET /movies/{movieId}/reviews/{reviewerName}/translation?language=code - returns a translated version of a specific review with given reviewer name and movieId
+    const translateEndpoint = reviewDetailsEndpoint.addResource("translate")
     
     allReviewsEndpoint.addMethod(
       "GET",
@@ -236,6 +259,11 @@ export class AppApi extends Construct {
         authorizer: requestAuthorizer,
         authorizationType: apig.AuthorizationType.CUSTOM,
       }
+    )
+
+    translateEndpoint.addMethod(
+      "GET",
+      new apig.LambdaIntegration(translateReviewFn, { proxy: true })
     )
   }
 }
