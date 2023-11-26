@@ -169,20 +169,20 @@ export class AppApi extends Construct {
       },
     });
 
-    // const authorizerFn = new node.NodejsFunction(this, "AuthorizerFn", {
-    //   ...appCommonFnProps,
-    //   entry: "./lambda/auth/authorizer.ts",
-    // });
+    const authorizerFn = new node.NodejsFunction(this, "AuthorizerFn", {
+      ...appCommonFnProps,
+      entry: "./lambda/auth/authorizer.ts",
+    });
 
-    // const requestAuthorizer = new apig.RequestAuthorizer(
-    //   this,
-    //   "RequestAuthorizer",
-    //   {
-    //     identitySources: [apig.IdentitySource.header("cookie")],
-    //     handler: authorizerFn,
-    //     resultsCacheTtl: cdk.Duration.minutes(0),
-    //   }
-    // );
+    const requestAuthorizer = new apig.RequestAuthorizer(
+      this,
+      "RequestAuthorizer",
+      {
+        identitySources: [apig.IdentitySource.header("cookie")],
+        handler: authorizerFn,
+        resultsCacheTtl: cdk.Duration.minutes(0),
+      }
+    );
 
     // Endpoint: GET movies
     const moviesEndpoint = api.root.addResource("movies")
@@ -209,7 +209,10 @@ export class AppApi extends Construct {
 
     allReviewsEndpoint.addMethod(
       "POST",
-      new apig.LambdaIntegration(newReviewFn, { proxy: true })
+      new apig.LambdaIntegration(newReviewFn, { proxy: true }),{
+        authorizer: requestAuthorizer,
+        authorizationType: apig.AuthorizationType.CUSTOM,
+      }
     );
 
     allReviewsNameEndpoint.addMethod(
@@ -229,7 +232,10 @@ export class AppApi extends Construct {
 
     reviewDetailsEndpoint.addMethod(
       "PUT",
-      new apig.LambdaIntegration(updateReviewFn, { proxy: true })
+      new apig.LambdaIntegration(updateReviewFn, { proxy: true }),{
+        authorizer: requestAuthorizer,
+        authorizationType: apig.AuthorizationType.CUSTOM,
+      }
     )
   }
 }
