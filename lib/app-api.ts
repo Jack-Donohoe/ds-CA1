@@ -204,32 +204,34 @@ export class AppApi extends Construct {
       }
     );
 
-    // Endpoint: GET movies
+    // Endpoint: movies
     const moviesEndpoint = api.root.addResource("movies")
 
-    // Endpoint: GET movies/reviews - returns all reviews in the app
+    // Endpoint: movies/reviews
     const allReviewsEndpoint = moviesEndpoint.addResource("reviews")
 
-    // Endpoint: GET movies/reviews/{reviewerName} - returns all reviews in app with given reviewer name
+    // Endpoint: movies/reviews/{reviewerName} - returns all reviews in app with given reviewer name
     const allReviewsNameEndpoint = allReviewsEndpoint.addResource("{reviewerName}")
 
-    // Endpoint: GET movies/{movieId}
+    // Endpoint: movies/{movieId}
     const movieEndpoint = moviesEndpoint.addResource("{movieId}")
 
-    // Endpoint: GET movies/{movieId}/reviews - returns all reviews on a specific movie
+    // Endpoint: movies/{movieId}/reviews - returns all reviews on a specific movie
     const reviewsEndpoint = movieEndpoint.addResource("reviews")
 
-    // Endpoint: GET movies/{movieId}/reviews/{details} - returns all reviews on a specific movie with given reviewer name or year
+    // Endpoint: movies/{movieId}/reviews/{details} - returns all reviews on a specific movie with given reviewer name or year
     const reviewDetailsEndpoint = reviewsEndpoint.addResource("{details}")
 
-    // Endpoint: GET /movies/{movieId}/reviews/{reviewerName}/translation?language=code - returns a translated version of a specific review with given reviewer name and movieId
+    // Endpoint: /movies/{movieId}/reviews/{reviewerName}/translation?language=code - returns a translated version of a specific review with given reviewer name and movieId
     const translateEndpoint = reviewDetailsEndpoint.addResource("translate")
     
+    // GET movies/reviews - return all movie reviews
     allReviewsEndpoint.addMethod(
       "GET",
       new apig.LambdaIntegration(getAllReviewsFn, { proxy: true })
     )
 
+    // POST movies/reviews - add a movie review
     allReviewsEndpoint.addMethod(
       "POST",
       new apig.LambdaIntegration(newReviewFn, { proxy: true }),{
@@ -238,21 +240,25 @@ export class AppApi extends Construct {
       }
     );
 
+    // GET movies/reviews/{reviewerName} - returns all movie reviews written by a given reviewer name
     allReviewsNameEndpoint.addMethod(
       "GET",
       new apig.LambdaIntegration(getReviewByNameFn, { proxy: true })
     )
     
+    // GET movies/{movieId}/reviews - returns review for specified movie ID.
     reviewsEndpoint.addMethod(
       "GET",
       new apig.LambdaIntegration(getReviewByIdFn, { proxy: true })
     )
 
+    // GET movies/{movieId}/reviews/{details} - returns reviews for specified movie ID and either reviewer name or year.
     reviewDetailsEndpoint.addMethod(
       "GET",
       new apig.LambdaIntegration(getReviewByDetailsFn, { proxy: true })
     )
 
+    // PUT movies/{movieId}/reviews/{details} - updates the movie review with the specified movie id and reviewer name.
     reviewDetailsEndpoint.addMethod(
       "PUT",
       new apig.LambdaIntegration(updateReviewFn, { proxy: true }),{
@@ -261,6 +267,7 @@ export class AppApi extends Construct {
       }
     )
 
+    // GET movies/{movieId}/reviews/{details}/translate?language= - gets the review with the specified movie id and reviewer name translated to a specific language.
     translateEndpoint.addMethod(
       "GET",
       new apig.LambdaIntegration(translateReviewFn, { proxy: true })
