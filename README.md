@@ -42,5 +42,20 @@ This repository contains the implementation of a serverless REST API for the AWS
 
 ![](./images/Authentication.png)
 
+### Indpendent Learning
+I used the AWS Translate service to incorporate translate options for review content. It is implemented in the following file:
+
+```
+../lambda/crud/translateReview.ts
+```
+
+The lambda function (translateReview.ts) uses AWS Translate to translate review text based on language codes provided by the user. The method fetches review content from DynamoDB and translates the content when the request is made.
+
+I used the follwing links as reference when adding in the translate functionality:
+
+- https://completecoding.io/typescript-translation-api/
+- https://docs.aws.amazon.com/translate/latest/dg/security-iam-awsmanpol.html
+- https://docs.aws.amazon.com/cdk/v2/guide/permissions.html
+
 ### Video
 [Link to demo](https://youtu.be/USGedFoZWZc)
